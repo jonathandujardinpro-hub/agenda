@@ -251,31 +251,25 @@ function DayView({date,setDate,today,routineFor,customFor,onSlot,onEdit,todayTas
                   <span style={{fontSize:10,color:st.bar,fontWeight:600,whiteSpace:"nowrap",flexShrink:0}}>{r.s}–{r.e}</span>
                 </div>
 
-                {/* Custom event chips — stacked inside the block */}
+                {/* Custom event chips — small fixed-height pills */}
                 {inside.length>0&&(
-                  <div style={{padding:"0 8px 8px",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}>
+                  <div style={{padding:"0 10px 10px",display:"flex",flexDirection:"column",gap:5}}>
                     {inside.map(c=>{
                       const cat=CAT[c.cat]||CAT.autre;
-                      const cs=tm(c.s),ce=c.s===c.e?cs+30:tm(c.e);
-                      // Height of chip proportional to duration
-                      const chipH=Math.max(durToPx(ce-cs)-6,SLOT_H*0.8);
-                      const chipShort=chipH<SLOT_H*1.4;
                       return(
-                        <div key={c.id} onClick={()=>onEdit(c)} style={{
+                        <div key={c.id} onClick={ev=>{ev.stopPropagation();onEdit(c);}} style={{
                           background:cat.color,
                           color:"#fff",
-                          borderRadius:10,
-                          padding:chipShort?"6px 10px":"8px 12px",
-                          height:chipH,
+                          borderRadius:9,
+                          padding:"7px 12px",
                           cursor:"pointer",
-                          display:"flex",flexDirection:"column",justifyContent:"center",
-                          boxShadow:`0 2px 10px ${cat.color}44`,
+                          display:"flex",alignItems:"center",gap:8,
+                          boxShadow:`0 2px 8px ${cat.color}44`,
                           flexShrink:0,
                           overflow:"hidden",
-                          boxSizing:"border-box",
                         }}>
-                          <div style={{fontWeight:700,fontSize:chipShort?12:14,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.title}</div>
-                          {!chipShort&&<div style={{fontSize:10,opacity:0.85,marginTop:2}}>{c.s}{c.s!==c.e?` — ${c.e}`:""}</div>}
+                          <div style={{fontWeight:700,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{c.title}</div>
+                          <div style={{fontSize:11,opacity:0.85,whiteSpace:"nowrap",flexShrink:0}}>{c.s}{c.s!==c.e?`–${c.e}`:""}</div>
                         </div>
                       );
                     })}
