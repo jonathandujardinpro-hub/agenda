@@ -11,14 +11,15 @@ const T = {
   accent: "#007AFF",
 };
 
+// Routine: only used for left bar color + label
 const RS = {
-  reveil:   { bar:"#AEAEB2", bg:"#FAFAFA", text:"#555555" },
-  sport:    { bar:"#34C759", bg:"#F4FFF7", text:"#1A6630" },
-  profond:  { bar:"#007AFF", bg:"#F0F6FF", text:"#004DBD" },
-  travail:  { bar:"#5AC8FA", bg:"#F0FBFF", text:"#0077A0" },
-  dejeuner: { bar:"#FF9500", bg:"#FFFAF0", text:"#995800" },
-  pause:    { bar:"#AF52DE", bg:"#FAF5FF", text:"#6B1E9A" },
-  autre:    { bar:"#8E8E93", bg:"#F9F9F9", text:"#555555" },
+  reveil:   { bar:"#AEAEB2", text:"#888888", label:"Réveil" },
+  sport:    { bar:"#34C759", text:"#1A7F37", label:"Sport" },
+  profond:  { bar:"#007AFF", text:"#004DBD", label:"Travail profond" },
+  travail:  { bar:"#5AC8FA", text:"#0077A0", label:"Travail" },
+  dejeuner: { bar:"#FF9500", text:"#995800", label:"Déjeuner" },
+  pause:    { bar:"#AF52DE", text:"#6B1E9A", label:"Pause" },
+  autre:    { bar:"#8E8E93", text:"#555555", label:"Autre" },
 };
 
 const CATS = [
@@ -39,8 +40,10 @@ const SLOT_MIN = 7  * 60;
 const SLOT_MAX = 23 * 60;
 const STEP     = 30;
 const SLOTS    = Array.from({length:(SLOT_MAX-SLOT_MIN)/STEP},(_,i)=>SLOT_MIN+i*STEP);
-const SLOT_H   = 56;
+const SLOT_H   = 52;
 const LABEL_W  = 52;
+const BAR_W    = 4;  // routine left bar width
+const BAR_GAP  = 40; // space for bar + routine label text
 
 const p2      = n=>String(n).padStart(2,"0");
 const tm      = s=>{const[h,m]=s.split(":").map(Number);return h*60+m;};
@@ -79,6 +82,24 @@ function routineFor(ds){
   ];
 }
 
+// Column layout for overlapping events
+function layout(events){
+  const sorted=[...events].sort((a,b)=>a.sMin-b.sMin);
+  const cols=[],result={};
+  sorted.forEach(e=>{
+    let ci=cols.findIndex(col=>{
+      const last=sorted.find(x=>x.id===col[col.length-1]);
+      return last.eMin<=e.sMin;
+    });
+    if(ci<0){ci=cols.length;cols.push([]);}
+    cols[ci].push(e.id);
+    result[e.id]={col:ci,total:0};
+  });
+  const n=cols.length||1;
+  Object.values(result).forEach(r=>r.total=n);
+  return result;
+}
+
 const LS=(k)=>{try{return JSON.parse(localStorage.getItem(k));}catch{return null;}};
 const SS=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
 
@@ -86,20 +107,20 @@ export default function App(){
   const today=todayDubai();
   const [date,  setDate ]=useState(today);
   const [tab,   setTab  ]=useState("jour");
-  const [evts,  setEvts ]=useState(()=>LS("ag9_e")||[]);
-  const [tasks, setTasks]=useState(()=>LS("ag9_t")||[]);
-  const [notes, setNotes]=useState(()=>LS("ag9_n")||[]);
+  const [evts,  setEvts ]=useState(()=>LS("agC_e")||[]);
+  const [tasks, setTasks]=useState(()=>LS("agC_t")||[]);
+  const [notes, setNotes]=useState(()=>LS("agC_n")||[]);
   const [modal, setModal]=useState(null);
   const [sync,  setSync ]=useState("ok");
   const [loaded,setLoaded]=useState(false);
-  const st=useRef(null), ref=useRef({evts,tasks,notes});
+  const st=useRef(null),ref=useRef({evts,tasks,notes});
 
   useEffect(()=>{
     loadData().then(d=>{
       if(d){
-        if(d.evts) {setEvts(d.evts); SS("ag9_e",d.evts);}
-        if(d.tasks){setTasks(d.tasks);SS("ag9_t",d.tasks);}
-        if(d.notes){setNotes(d.notes);SS("ag9_n",d.notes);}
+        if(d.evts) {setEvts(d.evts); SS("agC_e",d.evts);}
+        if(d.tasks){setTasks(d.tasks);SS("agC_t",d.tasks);}
+        if(d.notes){setNotes(d.notes);SS("agC_n",d.notes);}
       }
       setLoaded(true);
     });
@@ -113,7 +134,7 @@ export default function App(){
     setSync("saving");
     st.current=setTimeout(async()=>{
       const{evts,tasks,notes}=ref.current;
-      SS("ag9_e",evts);SS("ag9_t",tasks);SS("ag9_n",notes);
+      SS("agC_e",evts);SS("agC_t",tasks);SS("agC_n",notes);
       const ok=await saveData({evts,tasks,notes});
       setSync(ok===false?"err":"ok");
     },700);
@@ -126,7 +147,7 @@ export default function App(){
   const removeEvt=id=>{setEvts(p=>p.filter(x=>x.id!==id));setModal(null);};
   const todayTasks=tasks.filter(t=>!t.done&&(!t.due||t.due===today));
 
-  if(!loaded) return(
+  if(!loaded)return(
     <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:T.bg,fontFamily:"-apple-system,sans-serif"}}>
       <div style={{textAlign:"center"}}>
         <div style={{fontSize:48,marginBottom:16}}>📅</div>
@@ -139,7 +160,7 @@ export default function App(){
 
   return(
     <div style={{minHeight:"100vh",background:T.bg2,fontFamily:"-apple-system,'SF Pro Text','Helvetica Neue',sans-serif",color:T.text}}>
-      <header style={{position:"sticky",top:0,zIndex:100,background:"rgba(255,255,255,0.95)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderBottom:`1px solid ${T.border}`,height:50,display:"flex",alignItems:"center",padding:"0 20px",gap:12}}>
+      <header style={{position:"sticky",top:0,zIndex:100,background:"rgba(255,255,255,0.96)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderBottom:`1px solid ${T.border}`,height:50,display:"flex",alignItems:"center",padding:"0 20px",gap:12}}>
         <span style={{fontWeight:700,fontSize:17,letterSpacing:"-0.03em",flex:1}}>Mon agenda</span>
         <div style={{display:"flex",background:"#F0F0F0",borderRadius:10,padding:3,gap:1}}>
           {[["jour","Jour"],["semaine","Sem."],["taches","✅"],["notes","📝"]].map(([v,l])=>(
@@ -169,6 +190,10 @@ function DayView({date,setDate,today,routineFor,customFor,onSlot,onEdit,todayTas
   const routine=routineFor(date),custom=customFor(date);
   const totalH=SLOTS.length*SLOT_H;
 
+  const customEx=custom.map(c=>({...c,sMin:tm(c.s),eMin:c.s===c.e?tm(c.s)+30:tm(c.e)}));
+  const lay=customEx.length?layout(customEx):{};
+  const numCols=customEx.length?Math.max(...Object.values(lay).map(l=>l.total)):1;
+
   return(
     <div style={{maxWidth:640,margin:"0 auto",paddingBottom:100}}>
       {/* DATE NAV */}
@@ -191,7 +216,7 @@ function DayView({date,setDate,today,routineFor,customFor,onSlot,onEdit,todayTas
         </div>
       )}
 
-      {/* TASKS STRIP */}
+      {/* TASKS */}
       {isToday&&todayTasks.length>0&&(
         <div style={{margin:"0 20px 12px",background:T.bg,borderRadius:16,border:`1px solid ${T.border}`,overflow:"hidden"}}>
           {todayTasks.map((t,i)=>(
@@ -219,106 +244,98 @@ function DayView({date,setDate,today,routineFor,customFor,onSlot,onEdit,todayTas
             );
           })}
 
-          {/* ROUTINE BLOCKS — full width, left accent bar */}
+          {/* ── ROUTINE: just a thin colored bar on the left + mini label ── */}
           {routine.map(r=>{
             const rS=tm(r.s),rE=tm(r.e);
             if(rS<SLOT_MIN||rS>=SLOT_MAX)return null;
             const top=minToPx(rS),height=durToPx(rE-rS);
             const st=RS[r.cat]||RS.autre;
-            const short=height<SLOT_H*1.8;
-
-            // Custom events that fall inside this routine block
-            const inside=custom.filter(c=>{
-              const cs=tm(c.s),ce=c.s===c.e?cs+30:tm(c.e);
-              return cs>=rS&&cs<rE;
-            });
-
             return(
               <div key={r.id} style={{
                 position:"absolute",
-                left:LABEL_W+6,right:8,
+                left:LABEL_W+4,
+                width:BAR_GAP,
                 top:top+2,height:height-4,
-                background:st.bg,
-                borderRadius:14,
-                borderLeft:`3.5px solid ${st.bar}`,
-                zIndex:5,overflow:"hidden",
-                boxSizing:"border-box",
-                display:"flex",flexDirection:"column",
-              }}>
-                {/* Routine label row */}
-                <div onClick={()=>onSlot(date,r.s)} style={{display:"flex",alignItems:"center",gap:8,padding:short?"6px 12px":"8px 14px",cursor:"pointer",flexShrink:0}}>
-                  <span style={{fontWeight:700,fontSize:short?12:14,color:st.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{r.title}</span>
-                  <span style={{fontSize:10,color:st.bar,fontWeight:600,whiteSpace:"nowrap",flexShrink:0}}>{r.s}–{r.e}</span>
-                </div>
-
-                {/* Custom event chips — small fixed-height pills */}
-                {inside.length>0&&(
-                  <div style={{padding:"0 10px 10px",display:"flex",flexDirection:"column",gap:5}}>
-                    {inside.map(c=>{
-                      const cat=CAT[c.cat]||CAT.autre;
-                      return(
-                        <div key={c.id} onClick={ev=>{ev.stopPropagation();onEdit(c);}} style={{
-                          background:cat.color,
-                          color:"#fff",
-                          borderRadius:9,
-                          padding:"7px 12px",
-                          cursor:"pointer",
-                          display:"flex",alignItems:"center",gap:8,
-                          boxShadow:`0 2px 8px ${cat.color}44`,
-                          flexShrink:0,
-                          overflow:"hidden",
-                        }}>
-                          <div style={{fontWeight:700,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{c.title}</div>
-                          <div style={{fontSize:11,opacity:0.85,whiteSpace:"nowrap",flexShrink:0}}>{c.s}{c.s!==c.e?`–${c.e}`:""}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Add hint */}
-                {!short&&inside.length===0&&(
-                  <div onClick={()=>onSlot(date,r.s)} style={{marginTop:"auto",padding:"0 14px 8px",fontSize:10,color:st.bar,opacity:0.5,cursor:"pointer",letterSpacing:"0.04em"}}>+ AJOUTER</div>
-                )}
+                zIndex:4,
+                display:"flex",
+                flexDirection:"column",
+                alignItems:"center",
+                cursor:"pointer",
+              }} onClick={()=>onSlot(date,r.s)}>
+                {/* Colored vertical bar */}
+                <div style={{
+                  width:BAR_W,
+                  height:"100%",
+                  background:st.bar,
+                  borderRadius:BAR_W,
+                  position:"absolute",
+                  left:4,top:0,
+                }}/>
+                {/* Rotated mini label */}
+                <div style={{
+                  position:"absolute",
+                  top:"50%",
+                  left:12,
+                  transform:"translateY(-50%)",
+                  fontSize:9,
+                  fontWeight:700,
+                  color:st.bar,
+                  letterSpacing:"0.06em",
+                  whiteSpace:"nowrap",
+                  opacity:0.85,
+                  writingMode:"vertical-rl",
+                  textOrientation:"mixed",
+                  userSelect:"none",
+                }}>{r.title}</div>
               </div>
             );
           })}
 
-          {/* CUSTOM EVENTS outside routine blocks */}
-          {custom.filter(c=>{
-            const cs=tm(c.s);
-            return !routine.some(r=>cs>=tm(r.s)&&cs<tm(r.e));
-          }).map(c=>{
-            const sMin=tm(c.s),eMin=c.s===c.e?sMin+30:tm(c.e);
-            if(sMin<SLOT_MIN||sMin>=SLOT_MAX)return null;
-            const top=minToPx(sMin),height=Math.max(durToPx(eMin-sMin)-4,SLOT_H*0.9);
+          {/* ── CUSTOM EVENTS: full width (after bar zone), proper height ── */}
+          {customEx.map(c=>{
+            if(c.sMin<SLOT_MIN||c.sMin>=SLOT_MAX)return null;
+            const l=lay[c.id]||{col:0,total:1};
+            const top=minToPx(c.sMin);
+            const height=Math.max(durToPx(c.eMin-c.sMin)-4,SLOT_H*0.9);
             const cat=CAT[c.cat]||CAT.autre;
             const short=height<SLOT_H*1.4;
+
+            // Content starts after label+bar zone
+            const contentLeft=LABEL_W+BAR_GAP+8;
+            // Split into columns if overlapping
+            const colW=(l.total>1)?`calc((100% - ${contentLeft}px - 8px) / ${l.total})`:`calc(100% - ${contentLeft}px - 8px)`;
+            const colLeft=l.total>1?`calc(${contentLeft}px + (100% - ${contentLeft}px - 8px) * ${l.col} / ${l.total})`:`${contentLeft}px`;
+
             return(
               <div key={c.id} onClick={()=>onEdit(c)} style={{
                 position:"absolute",
-                left:LABEL_W+6,right:8,
+                left:colLeft,
+                width:colW,
                 top:top+2,height:height,
-                background:cat.color,color:"#fff",
-                borderRadius:14,
-                padding:short?"6px 12px":"10px 14px",
-                cursor:"pointer",zIndex:6,
+                background:cat.color,
+                color:"#fff",
+                borderRadius:12,
+                padding:short?"7px 12px":"10px 14px",
+                cursor:"pointer",
+                zIndex:6,
                 display:"flex",flexDirection:"column",justifyContent:"center",
-                boxShadow:`0 4px 18px ${cat.color}55`,
-                overflow:"hidden",boxSizing:"border-box",
+                boxShadow:`0 3px 16px ${cat.color}44`,
+                overflow:"hidden",
+                boxSizing:"border-box",
               }}>
                 <div style={{fontWeight:700,fontSize:short?13:15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.title}</div>
-                {!short&&<div style={{fontSize:11,opacity:0.85,marginTop:2}}>{c.s}{c.s!==c.e?` — ${c.e}`:""}</div>}
+                {!short&&<div style={{fontSize:11,opacity:0.85,marginTop:3}}>{c.s}{c.s!==c.e?` — ${c.e}`:""}</div>}
               </div>
             );
           })}
 
           {/* Clickable empty slots */}
-          {SLOTS.map((slotMin,i)=>{
-            const inRoutine=routine.some(r=>slotMin>=tm(r.s)&&slotMin<tm(r.e));
-            if(inRoutine)return null;
-            return<div key={`t-${slotMin}`} onClick={()=>onSlot(date,mt(slotMin))} style={{position:"absolute",left:LABEL_W+6,right:8,top:i*SLOT_H,height:SLOT_H,cursor:"pointer",zIndex:4}}/>;
-          })}
+          {SLOTS.map((slotMin,i)=>(
+            <div key={`t-${slotMin}`}
+              onClick={()=>onSlot(date,mt(slotMin))}
+              style={{position:"absolute",left:LABEL_W+BAR_GAP+8,right:8,top:i*SLOT_H,height:SLOT_H,cursor:"pointer",zIndex:3}}
+            />
+          ))}
         </div>
       </div>
     </div>
@@ -350,7 +367,7 @@ function WeekView({date,setDate,today,routineFor,customFor,onDay}){
                 <div style={{fontSize:20,fontWeight:700,color:isTod?T.accent:T.text,lineHeight:1.2}}>{dd.getDate()}</div>
               </div>
               {r.map(ev=>{const st=RS[ev.cat]||RS.autre;return(
-                <div key={ev.id} style={{borderLeft:`2.5px solid ${st.bar}`,background:st.bg,borderRadius:5,padding:"2px 6px",marginBottom:3,fontSize:9,fontWeight:600,color:st.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.s.slice(0,5)} {ev.title}</div>
+                <div key={ev.id} style={{borderLeft:`2.5px solid ${st.bar}`,background:"#FAFAFA",borderRadius:5,padding:"2px 6px",marginBottom:3,fontSize:9,fontWeight:600,color:st.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.s.slice(0,5)} {ev.title}</div>
               );})}
               {c.map(ev=>{const cat=CAT[ev.cat]||CAT.autre;return(
                 <div key={ev.id} style={{background:cat.color,borderRadius:5,padding:"2px 6px",marginBottom:3,fontSize:9,fontWeight:600,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.s.slice(0,5)} {ev.title}</div>
@@ -373,35 +390,28 @@ function Modal({modal,onClose,onSave,onDelete}){
   return(
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:200,backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.bg,borderRadius:"28px 28px 0 0",width:"100%",maxWidth:620,maxHeight:"94vh",overflowY:"auto",boxShadow:"0 -16px 60px rgba(0,0,0,0.18)"}}>
-        {/* Colored header */}
         <div style={{background:cat.color,borderRadius:"28px 28px 0 0",padding:"18px 24px 22px"}}>
           <div style={{width:36,height:4,background:"rgba(255,255,255,0.35)",borderRadius:2,margin:"0 auto 16px"}}/>
           <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.65)",letterSpacing:"0.08em",marginBottom:8}}>{isEdit?"MODIFIER":"NOUVEL ÉVÉNEMENT"}</div>
           <input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="Titre…" style={{width:"100%",background:"transparent",border:"none",outline:"none",fontSize:26,fontWeight:700,color:"#fff",fontFamily:"inherit",caretColor:"#fff"}}/>
         </div>
-
         <div style={{padding:"22px 24px 48px"}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:18}}>
             <div><div style={LB()}>Date</div><input style={IP()} type="date" value={f.ds} onChange={e=>set("ds",e.target.value)}/></div>
             <div><div style={LB()}>Début</div><input style={IP()} type="time" value={f.s} onChange={e=>set("s",e.target.value)}/></div>
             <div><div style={LB()}>Fin</div><input style={IP()} type="time" value={f.e} onChange={e=>set("e",e.target.value)}/></div>
           </div>
-
           <div style={LB()}>Catégorie</div>
           <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:18}}>
             {CATS.map(c=>(
               <button key={c.id} onClick={()=>set("cat",c.id)} style={{background:f.cat===c.id?c.color:"transparent",color:f.cat===c.id?"#fff":T.sub,border:`1.5px solid ${f.cat===c.id?c.color:T.border}`,borderRadius:20,padding:"6px 14px",fontSize:13,fontWeight:600,cursor:"pointer",transition:"all 0.1s"}}>{c.label}</button>
             ))}
           </div>
-
           <div style={LB()}>Note (optionnel)</div>
           <textarea style={{...IP(),height:80,resize:"vertical",marginBottom:22}} placeholder="…" value={f.note||""} onChange={e=>set("note",e.target.value)}/>
-
           <div style={{display:"flex",gap:10}}>
             {isEdit&&<button onClick={()=>onDelete(f.id)} style={{flex:1,background:"#FFF0F0",color:"#FF3B30",border:"1.5px solid #FFCDD0",borderRadius:16,padding:15,fontWeight:700,cursor:"pointer",fontSize:15}}>Supprimer</button>}
-            <button onClick={()=>onSave(f)} style={{flex:2,background:cat.color,color:"#fff",border:"none",borderRadius:16,padding:15,fontWeight:700,cursor:"pointer",fontSize:16,boxShadow:`0 4px 18px ${cat.color}55`}}>
-              {isEdit?"Enregistrer":"Ajouter"}
-            </button>
+            <button onClick={()=>onSave(f)} style={{flex:2,background:cat.color,color:"#fff",border:"none",borderRadius:16,padding:15,fontWeight:700,cursor:"pointer",fontSize:16,boxShadow:`0 4px 18px ${cat.color}55`}}>{isEdit?"Enregistrer":"Ajouter"}</button>
           </div>
         </div>
       </div>
@@ -469,7 +479,7 @@ function TR({task,done,onToggle,onDelete}){
 function NotesView({notes,setNotes}){
   const[ed,setEd]=useState(null);
   const save=()=>{if(!ed.title.trim())return;if(ed.id)setNotes(p=>p.map(n=>n.id===ed.id?{...ed}:n));else setNotes(p=>[{...ed,id:`N:${Date.now()}`,date:todayDubai()},...p]);setEd(null);};
-  if(ed) return(
+  if(ed)return(
     <div style={{maxWidth:580,margin:"0 auto",padding:"16px 20px"}}>
       <button onClick={()=>setEd(null)} style={{background:"none",border:"none",color:T.accent,fontSize:15,cursor:"pointer",marginBottom:16,fontWeight:500}}>← Retour</button>
       <input style={{...IP(),fontSize:20,fontWeight:700,marginBottom:12,letterSpacing:"-0.02em"}} placeholder="Titre" value={ed.title} onChange={e=>setEd(p=>({...p,title:e.target.value}))}/>
